@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Find Donors &ndash; Blood Bank</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <header class="site-header">
+        <div class="nav-inner">
+            <a class="brand" href="index.html"><span class="drop">&#128138;</span> Blood Bank</a>
+            <nav class="links">
+                <a href="index.html">Home</a>
+                <a href="search-donors.html" class="active">Find Donors</a>
+                <a href="request-blood.html">Request Blood</a>
+                <a href="requests.html">Requests</a>
+                <a href="register-donor.html">Become a Donor</a>
+                <a href="update-availability.html">My Availability</a>
+            </nav>
+        </div>
+    </header>
+
+    <main>
+        <h1 class="page-title">Find donors near you</h1>
+        <p class="page-subtitle">Search by blood group and location. Results are sorted by
+            distance, closest first.</p>
+
+        <div class="card">
+            <div class="alert error" id="alert"></div>
+            <form id="search-form">
+                <div class="grid-2">
+                    <div class="field">
+                        <label for="bloodGroup">Blood group</label>
+                        <select id="bloodGroup">
+                            <option value="">Any</option>
+                            <option>A+</option><option>A-</option>
+                            <option>B+</option><option>B-</option>
+                            <option>AB+</option><option>AB-</option>
+                            <option>O+</option><option>O-</option>
+                        </select>
+                    </div>
+                    <div class="field">
+                        <label for="radiusKm">Search radius (km)</label>
+                        <input type="number" id="radiusKm" min="1" value="50">
+                    </div>
+                    <div class="field">
+                        <label for="city">City</label>
+                        <input type="text" id="city" placeholder="e.g. Chennai" required>
+                    </div>
+                    <div class="field">
+                        <label for="state">State</label>
+                        <input type="text" id="state" placeholder="e.g. Tamil Nadu" required>
+                    </div>
+                </div>
+                <input type="hidden" id="lat">
+                <input type="hidden" id="lng">
+                <div style="display:flex; gap:10px; align-items:center;">
+                    <button type="submit" class="btn" id="search-btn">Search</button>
+                    <button type="button" class="btn secondary" id="locate-btn">Use my location</button>
+                </div>
+            </form>
+        </div>
+
+        <div class="results" id="results"></div>
+    </main>
+
+    <footer>Blood Bank Management &mdash; connecting donors and recipients faster.</footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/axios@1.7.7/dist/axios.min.js"></script>
+    <script src="js/api.js"></script>
+    <script src="js/session.js"></script>
+    <script src="js/geocode.js"></script>
+    <script>
+        const form = document.getElementById("search-form");
+        const alertEl = document.getElementById("alert");
+        const resultsEl = document.getElementById("results");
+        const searchBtn = document.getElementById("search-btn");
+        const cityInput = document.getElementById("city");
+        const stateInput = document.getElementById("state");
+        const latInput = document.getElementById("lat");
+        const lngInput = document.getElementById("lng");
+        const locateBtn = document.getElementById("locate-btn");
+
+        // Once "Use my location" fills lat/lng directly from the browser, any
+        // manual edit to city/state should invalidate those coordinates so
+        // submit re-geocodes the typed city/state instead of using stale ones.
+        function invalidateCoordsFromGeolocation() {
+            latInput.value = "";
+            lngInput.value = "";
+        }
+        cityInput.addEventListener("input", invalidateCoordsFromGeolocation);
+        stateInput.addEventListener("input", invalidateCoordsFromGeolocation);
+
+        locateBtn.addEventListener("click", async () => {
+            hideAlert(alertEl);
+            setLoading(locateBtn, true, "Locating...");
+            const coords = await getCoordinates();
+            if (!coords) {
+                setLoading(locateBtn, false);
+                showAlert(alertEl, "Couldn't get your location. Enter city and state manually.");
+                return;
+            }
+            try {
+                const place = await Geocoding.reverse(coords.lat, coords.lng);
+                cityInput.value = place.city;
+                stateInput.value = place.state;
+                latInput.value = coords.lat;
+                lngInput.value = coords.lng;
+            } catch (err) {
+                showAlert(alertEl, err.message);
+            } finally {
+                setLoading(locateBtn, false);
+            }
+        });
+
+        function renderDonors(donors) {
+            if (donors.length === 0) {
+                resultsEl.innerHTML = `<div class="empty-state">No donors found in this range. Try widening the radius.</div>`;
+                return;
+            }
+            resultsEl.innerHTML = donors.map((d) => `
+                <div class="donor-card">
+                    <div class="donor-main">
+                        <div class="blood-badge">${d.bloodGroup}</div>
+                        <div>
+                            <div class="donor-name">${d.name}</div>
+                            <div class="donor-meta">${d.location.city}, ${d.location.state}
+                                &middot; ${d.available ? "Available" : "Currently unavailable"}
+                                &middot; ${d.contactNumber || "No contact listed"}</div>
+                        </div>
+                    </div>
+                    <div class="distance-pill">${d.distanceKm.toFixed(1)} km away</div>
+                </div>
+            `).join("");
+        }
+
+        form.addEventListener("submit", async (e) => {
+            e.preventDefault();
+            hideAlert(alertEl);
+
+            const city = cityInput.value.trim();
+            const state = stateInput.value.trim();
+            const bloodGroup = document.getElementById("bloodGroup").value;
+            const radiusKm = document.getElementById("radiusKm").value;
+
+            setLoading(searchBtn, true, "Locating city...");
+            let lat = parseFloat(latInput.value);
+            let lng = parseFloat(lngInput.value);
+
+            if (Number.isNaN(lat) || Number.isNaN(lng)) {
+                try {
+                    const coords = await Geocoding.forward(city, state);
+                    lat = coords.lat;
+                    lng = coords.lng;
+                } catch (err) {
+                    setLoading(searchBtn, false);
+                    showAlert(alertEl, err.message);
+                    return;
+                }
+            }
+
+            searchBtn.textContent = "Searching...";
+            const { data, error } = await API.get("/donors/search", {
+                lat, lng, bloodGroup: bloodGroup || undefined,
+                radiusKm: radiusKm || undefined,
+            });
+            setLoading(searchBtn, false);
+
+            if (error) {
+                showAlert(alertEl, error);
+                return;
+            }
+            renderDonors(data);
+        });
+    </script>
+</body>
+</html>
