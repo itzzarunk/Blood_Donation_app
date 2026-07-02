@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Become a Donor &ndash; Blood Bank</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <header class="site-header">
+        <div class="nav-inner">
+            <a class="brand" href="index.html"><span class="drop">&#128138;</span> Blood Bank</a>
+            <nav class="links">
+                <a href="index.html">Home</a>
+                <a href="search-donors.html">Find Donors</a>
+                <a href="request-blood.html">Request Blood</a>
+                <a href="requests.html">Requests</a>
+                <a href="register-donor.html" class="active">Become a Donor</a>
+                <a href="update-availability.html">My Availability</a>
+            </nav>
+        </div>
+    </header>
+
+    <main>
+        <h1 class="page-title">Register as a donor</h1>
+        <p class="page-subtitle">Your details help recipients nearby find you quickly during an emergency.</p>
+
+        <div class="card">
+            <div class="alert error" id="alert"></div>
+            <div class="alert success" id="success"></div>
+            <form id="donor-form">
+                <div class="grid-2">
+                    <div class="field">
+                        <label for="name">Full name</label>
+                        <input type="text" id="name" required>
+                    </div>
+                    <div class="field">
+                        <label for="email">Email</label>
+                        <input type="email" id="email" required>
+                    </div>
+                    <div class="field">
+                        <label for="password">Password</label>
+                        <input type="password" id="password" minlength="6" required>
+                        <span class="hint">At least 6 characters.</span>
+                    </div>
+                    <div class="field">
+                        <label for="phone">Phone</label>
+                        <input type="tel" id="phone">
+                    </div>
+                    <div class="field">
+                        <label for="bloodGroup">Blood group</label>
+                        <select id="bloodGroup" required>
+                            <option value="" disabled selected>Select</option>
+                            <option>A+</option><option>A-</option>
+                            <option>B+</option><option>B-</option>
+                            <option>AB+</option><option>AB-</option>
+                            <option>O+</option><option>O-</option>
+                        </select>
+                    </div>
+                    <div class="field">
+                        <label for="contactNumber">Contact number</label>
+                        <input type="tel" id="contactNumber">
+                    </div>
+                    <div class="field">
+                        <label for="city">City</label>
+                        <input type="text" id="city" required>
+                    </div>
+                    <div class="field">
+                        <label for="state">State</label>
+                        <input type="text" id="state" required>
+                    </div>
+                    <div class="field">
+                        <label for="pincode">Pincode</label>
+                        <input type="text" id="pincode">
+                    </div>
+                    <div class="field">
+                        <label for="lat">Latitude</label>
+                        <input type="number" step="any" id="lat" required>
+                    </div>
+                    <div class="field">
+                        <label for="lng">Longitude</label>
+                        <input type="number" step="any" id="lng" required>
+                    </div>
+                </div>
+                <div style="display:flex; gap:10px; align-items:center;">
+                    <button type="submit" class="btn" id="submit-btn">Register</button>
+                    <button type="button" class="btn secondary" id="locate-btn">Use my location</button>
+                </div>
+            </form>
+        </div>
+    </main>
+
+    <footer>Blood Bank Management &mdash; connecting donors and recipients faster.</footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/axios@1.7.7/dist/axios.min.js"></script>
+    <script src="js/api.js"></script>
+    <script src="js/session.js"></script>
+    <script>
+        const form = document.getElementById("donor-form");
+        const alertEl = document.getElementById("alert");
+        const successEl = document.getElementById("success");
+        const submitBtn = document.getElementById("submit-btn");
+
+        document.getElementById("locate-btn").addEventListener("click", async () => {
+            const coords = await getCoordinates();
+            if (!coords) {
+                showAlert(alertEl, "Couldn't get your location. Enter coordinates manually.");
+                return;
+            }
+            document.getElementById("lat").value = coords.lat.toFixed(6);
+            document.getElementById("lng").value = coords.lng.toFixed(6);
+            hideAlert(alertEl);
+        });
+
+        form.addEventListener("submit", async (e) => {
+            e.preventDefault();
+            hideAlert(alertEl);
+            hideAlert(successEl);
+
+            const payload = {
+                name: document.getElementById("name").value,
+                email: document.getElementById("email").value,
+                password: document.getElementById("password").value,
+                phone: document.getElementById("phone").value,
+                bloodGroup: document.getElementById("bloodGroup").value,
+                contactNumber: document.getElementById("contactNumber").value,
+                city: document.getElementById("city").value,
+                state: document.getElementById("state").value,
+                pincode: document.getElementById("pincode").value,
+                latitude: parseFloat(document.getElementById("lat").value),
+                longitude: parseFloat(document.getElementById("lng").value),
+            };
+
+            setLoading(submitBtn, true, "Registering...");
+            const { data, error } = await API.post("/donors", payload);
+            setLoading(submitBtn, false);
+
+            if (error) {
+                showAlert(alertEl, error);
+                return;
+            }
+            showAlert(successEl, `Thanks, ${data.name}! You're registered as a ${data.bloodGroup} donor.`, "success");
+            form.reset();
+        });
+    </script>
+</body>
+</html>
