@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Requests &ndash; Blood Bank</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <header class="site-header">
+        <div class="nav-inner">
+            <a class="brand" href="index.html"><span class="drop">&#128138;</span> Blood Bank</a>
+            <nav class="links">
+                <a href="index.html">Home</a>
+                <a href="search-donors.html">Find Donors</a>
+                <a href="request-blood.html">Request Blood</a>
+                <a href="requests.html" class="active">Requests</a>
+                <a href="register-donor.html">Become a Donor</a>
+                <a href="update-availability.html">My Availability</a>
+            </nav>
+        </div>
+    </header>
+
+    <main>
+        <h1 class="page-title">Blood requests</h1>
+        <p class="page-subtitle">Track open requests and update status as they're fulfilled.</p>
+
+        <div class="card" style="margin-bottom:24px;">
+            <div class="field" style="max-width:220px; margin-bottom:0;">
+                <label for="status-filter">Filter by status</label>
+                <select id="status-filter">
+                    <option value="">All</option>
+                    <option value="PENDING">Pending</option>
+                    <option value="FULFILLED">Fulfilled</option>
+                    <option value="CANCELLED">Cancelled</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="alert error" id="alert"></div>
+        <div class="results" id="results"></div>
+    </main>
+
+    <footer>Blood Bank Management &mdash; connecting donors and recipients faster.</footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/axios@1.7.7/dist/axios.min.js"></script>
+    <script src="js/api.js"></script>
+    <script src="js/session.js"></script>
+    <script>
+        const resultsEl = document.getElementById("results");
+        const alertEl = document.getElementById("alert");
+        const statusFilter = document.getElementById("status-filter");
+
+        function renderRequests(requests) {
+            if (requests.length === 0) {
+                resultsEl.innerHTML = `<div class="empty-state">No requests found.</div>`;
+                return;
+            }
+            resultsEl.innerHTML = requests.map((r) => `
+                <div class="request-card" data-id="${r.id}">
+                    <div class="donor-main">
+                        <div class="blood-badge">${r.bloodGroup}</div>
+                        <div>
+                            <div class="donor-name">${r.recipient.name} &middot; ${r.unitsRequired} unit(s)</div>
+                            <div class="donor-meta">${r.location.city}, ${r.location.state}
+                                &middot; ${r.urgency} urgency
+                                &middot; ${new Date(r.createdAt).toLocaleString()}</div>
+                        </div>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:10px;">
+                        <span class="status-pill status-${r.status}">${r.status}</span>
+                        ${r.status === "PENDING" ? `
+                            <button class="btn small" data-action="fulfill" data-id="${r.id}">Mark fulfilled</button>
+                            <button class="btn small secondary" data-action="cancel" data-id="${r.id}">Cancel</button>
+                        ` : ""}
+                    </div>
+                </div>
+            `).join("");
+        }
+
+        async function loadRequests() {
+            hideAlert(alertEl);
+            const status = statusFilter.value || undefined;
+            const { data, error } = await API.get("/requests", { status }, { useCache: false });
+            if (error) {
+                showAlert(alertEl, error);
+                return;
+            }
+            renderRequests(data);
+        }
+
+        resultsEl.addEventListener("click", async (e) => {
+            const btn = e.target.closest("button[data-action]");
+            if (!btn) return;
+            const id = btn.dataset.id;
+            const newStatus = btn.dataset.action === "fulfill" ? "FULFILLED" : "CANCELLED";
+            btn.disabled = true;
+            const { error } = await API.patch(`/requests/${id}/status`, { status: newStatus });
+            if (error) {
+                showAlert(alertEl, error);
+                btn.disabled = false;
+                return;
+            }
+            loadRequests();
+        });
+
+        statusFilter.addEventListener("change", loadRequests);
+        loadRequests();
+    </script>
+</body>
+</html>
