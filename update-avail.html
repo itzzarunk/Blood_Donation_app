@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Availability &ndash; Blood Bank</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <header class="site-header">
+        <div class="nav-inner">
+            <a class="brand" href="index.html"><span class="drop">&#128138;</span> Blood Bank</a>
+            <nav class="links">
+                <a href="index.html">Home</a>
+                <a href="search-donors.html">Find Donors</a>
+                <a href="request-blood.html">Request Blood</a>
+                <a href="requests.html">Requests</a>
+                <a href="register-donor.html">Become a Donor</a>
+                <a href="update-availability.html" class="active">My Availability</a>
+            </nav>
+        </div>
+    </header>
+
+    <main>
+        <h1 class="page-title">Update your availability</h1>
+        <p class="page-subtitle">Log in with your donor account to mark yourself available or
+            unavailable for donation.</p>
+
+        <div class="card" id="login-card">
+            <div class="alert error" id="login-alert"></div>
+            <form id="login-form">
+                <div class="grid-2">
+                    <div class="field">
+                        <label for="email">Email</label>
+                        <input type="email" id="email" required>
+                    </div>
+                    <div class="field">
+                        <label for="password">Password</label>
+                        <input type="password" id="password" required>
+                    </div>
+                </div>
+                <button type="submit" class="btn" id="login-btn">Log in</button>
+            </form>
+        </div>
+
+        <div class="card" id="profile-card" style="display:none; margin-top:20px;">
+            <div class="alert error" id="profile-alert"></div>
+            <div class="alert success" id="profile-success"></div>
+            <div class="donor-card" style="border:none; padding:0;">
+                <div class="donor-main">
+                    <div class="blood-badge" id="profile-blood-group"></div>
+                    <div>
+                        <div class="donor-name" id="profile-name"></div>
+                        <div class="donor-meta" id="profile-meta"></div>
+                    </div>
+                </div>
+                <span class="status-pill" id="profile-status"></span>
+            </div>
+            <div style="display:flex; gap:10px; margin-top:20px;">
+                <button type="button" class="btn" id="mark-available-btn">Mark available</button>
+                <button type="button" class="btn secondary" id="mark-unavailable-btn">Mark unavailable</button>
+                <button type="button" class="btn secondary" id="logout-btn" style="margin-left:auto;">Log out</button>
+            </div>
+        </div>
+    </main>
+
+    <footer>Blood Bank Management &mdash; connecting donors and recipients faster.</footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/axios@1.7.7/dist/axios.min.js"></script>
+    <script src="js/api.js"></script>
+    <script src="js/session.js"></script>
+    <script>
+        const loginCard = document.getElementById("login-card");
+        const profileCard = document.getElementById("profile-card");
+        const loginForm = document.getElementById("login-form");
+        const loginAlert = document.getElementById("login-alert");
+        const profileAlert = document.getElementById("profile-alert");
+        const profileSuccess = document.getElementById("profile-success");
+        const loginBtn = document.getElementById("login-btn");
+
+        function renderDonor(donor) {
+            document.getElementById("profile-blood-group").textContent = donor.bloodGroup;
+            document.getElementById("profile-name").textContent = donor.name;
+            document.getElementById("profile-meta").textContent =
+                `${donor.location.city}, ${donor.location.state} · ${donor.contactNumber || "No contact listed"}`;
+            const statusEl = document.getElementById("profile-status");
+            statusEl.textContent = donor.available ? "AVAILABLE" : "UNAVAILABLE";
+            statusEl.className = `status-pill status-${donor.available ? "FULFILLED" : "CANCELLED"}`;
+            document.getElementById("mark-available-btn").disabled = donor.available;
+            document.getElementById("mark-unavailable-btn").disabled = !donor.available;
+        }
+
+        async function loadDonor(donorId) {
+            const { data, error } = await API.get(`/donors/${donorId}`, null, { useCache: false });
+            if (error) {
+                hideAlert(profileSuccess);
+                showAlert(profileAlert, error);
+                return;
+            }
+            hideAlert(profileAlert);
+            renderDonor(data);
+        }
+
+        async function updateAvailability(available) {
+            const user = Session.get();
+            hideAlert(profileAlert);
+            hideAlert(profileSuccess);
+            const { data, error } = await API.patch(`/donors/${user.profileId}/availability`, { available });
+            if (error) {
+                showAlert(profileAlert, error);
+                return;
+            }
+            renderDonor(data);
+            showAlert(profileSuccess, `You're now marked as ${available ? "available" : "unavailable"}.`, "success");
+        }
+
+        function showProfileView() {
+            loginCard.style.display = "none";
+            profileCard.style.display = "block";
+        }
+
+        function showLoginView() {
+            loginCard.style.display = "block";
+            profileCard.style.display = "none";
+        }
+
+        loginForm.addEventListener("submit", async (e) => {
+            e.preventDefault();
+            hideAlert(loginAlert);
+
+            const payload = {
+                email: document.getElementById("email").value,
+                password: document.getElementById("password").value,
+            };
+
+            setLoading(loginBtn, true, "Logging in...");
+            const { data, error } = await API.post("/auth/login", payload);
+            setLoading(loginBtn, false);
+
+            if (error) {
+                showAlert(loginAlert, error);
+                return;
+            }
+            if (data.role !== "DONOR" || !data.profileId) {
+                showAlert(loginAlert, "This account isn't registered as a donor.");
+                return;
+            }
+
+            Session.save(data);
+            showProfileView();
+            loadDonor(data.profileId);
+        });
+
+        document.getElementById("mark-available-btn").addEventListener("click", () => updateAvailability(true));
+        document.getElementById("mark-unavailable-btn").addEventListener("click", () => updateAvailability(false));
+        document.getElementById("logout-btn").addEventListener("click", () => {
+            Session.clear();
+            loginForm.reset();
+            showLoginView();
+        });
+
+        (function init() {
+            const user = Session.get();
+            if (user && user.role === "DONOR" && user.profileId) {
+                showProfileView();
+                loadDonor(user.profileId);
+            }
+        })();
+    </script>
+</body>
+</html>
