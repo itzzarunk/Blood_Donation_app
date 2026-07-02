@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Blood Bank Management</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <header class="site-header">
+        <div class="nav-inner">
+            <a class="brand" href="index.html"><span class="drop">&#128138;</span> Blood Bank</a>
+            <nav class="links">
+                <a href="index.html" class="active">Home</a>
+                <a href="search-donors.html">Find Donors</a>
+                <a href="request-blood.html">Request Blood</a>
+                <a href="requests.html">Requests</a>
+                <a href="register-donor.html">Become a Donor</a>
+                <a href="update-availability.html">My Availability</a>
+            </nav>
+        </div>
+    </header>
+
+    <main>
+        <section class="hero">
+            <h1>Find blood donors near you, in minutes.</h1>
+            <p>Search registered donors by blood group and location, or submit a real-time
+                request when someone needs blood urgently.</p>
+            <div class="actions">
+                <a class="btn secondary" href="search-donors.html">Find a Donor</a>
+                <a class="btn secondary" href="request-blood.html">Request Blood</a>
+                <a class="btn secondary" href="register-donor.html">Register as Donor</a>
+            </div>
+        </section>
+
+        <div class="stat-row" id="stat-row">
+            <div class="stat-tile">
+                <div class="value" id="stat-total">&mdash;</div>
+                <div class="label">Registered donors</div>
+            </div>
+            <div class="stat-tile">
+                <div class="value" id="stat-available">&mdash;</div>
+                <div class="label">Currently available</div>
+            </div>
+            <div class="stat-tile">
+                <div class="value" id="stat-pending">&mdash;</div>
+                <div class="label">Pending requests</div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h3 style="margin-top:0">How it works</h3>
+            <ol style="color:var(--muted); line-height:1.9;">
+                <li>Donors register once with their blood group and location.</li>
+                <li>Recipients search nearby donors by blood group, sorted by distance.</li>
+                <li>If no donor is immediately available, submit a blood request that donors and
+                    admins can track until it's fulfilled.</li>
+            </ol>
+        </div>
+    </main>
+
+    <footer>Blood Bank Management &mdash; connecting donors and recipients faster.</footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/axios@1.7.7/dist/axios.min.js"></script>
+    <script src="js/api.js"></script>
+    <script>
+        (async () => {
+            const { data, error } = await API.get("/stats");
+            if (error) {
+                document.getElementById("stat-row").innerHTML =
+                    `<div class="alert error show" style="grid-column:1/-1">${error}</div>`;
+                return;
+            }
+            document.getElementById("stat-total").textContent = data.totalDonors;
+            document.getElementById("stat-available").textContent = data.availableDonors;
+            document.getElementById("stat-pending").textContent = data.pendingRequests;
+        })();
+    </script>
+</body>
+</html>
